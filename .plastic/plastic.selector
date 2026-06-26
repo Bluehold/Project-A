@@ -1,0 +1,3 @@
+repository "Project-A/Project-A@14569666386716@cloud"
+  path "/"
+    smartbranch "/main/player"
