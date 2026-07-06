@@ -1,19 +1,41 @@
-using System.Runtime.ConstrainedExecution;
-using Unity.Mathematics;
-using Unity.VisualScripting;
+using System;
 using UnityEngine;
-using UnityEngine.InputSystem;
-using static UnityEngine.InputSystem.InputAction;
 
 public class BasePlayer : MonoBehaviour, IDamageable
 {
     [SerializeField]
     private bool IsAlive;
+    public enum PlayerState
+    {
+        Idle,
+        Move,
+        Roll
+    }
+
+    public enum PlayerAttackState
+    {
+        Idle,
+        Attack,
+        Skill1,
+        Skill2
+    }
+
+    private PlayerState CurrentState;
+    private PlayerAttackState CurrentAttackState;
 
     [SerializeField]
     private float MaxHealth;
     [SerializeField]
     private float Health;
+
+    public event Action<float, float> HealthChanged;
+    public event Action<float, float> ManaChanged;
+    public event Action<float, float> StaminaChanged;
+
+    public event Action<float, float> HealthDropped;
+    public event Action<float, float> ManaDropped;
+    public event Action<float, float> StaminaDropped;
+
     [SerializeField]
     private float MaxMana;
     [SerializeField]
@@ -64,7 +86,7 @@ public class BasePlayer : MonoBehaviour, IDamageable
     private float RollStaminaChargeDelay;
     [SerializeField]
     private float RollDistance = 0f;
-    private float RollDuration = 0.7835f;
+    private float RollDuration = 0.35f;
     private float RollTime;
     private Vector3 RollStartPosition;
     private Quaternion RollStartRotation;
@@ -88,6 +110,14 @@ public class BasePlayer : MonoBehaviour, IDamageable
     [SerializeField]
     private float Skill2RequiredPoint;
 
+    private void OnHealthChange(float health, float maxHealth) => HealthChanged?.Invoke(health, maxHealth);
+    private void OnManaChange(float mana, float maxMana) => ManaChanged?.Invoke(mana, maxMana);
+    private void OnStaminaChange(float stamina, float maxStamina) => StaminaChanged?.Invoke(stamina, maxStamina);
+
+    private void OnHealthDrop(float health, float maxHealth) => HealthDropped?.Invoke(health, maxHealth);
+    private void OnManaDrop(float mana, float maxMana) => ManaDropped?.Invoke(mana, maxMana);
+    private void OnStaminaDrop(float stamina, float maxStamina) => StaminaDropped?.Invoke(stamina, maxStamina);
+
     private void Awake()
     {
         rb = GetComponent<Rigidbody>();
@@ -96,9 +126,9 @@ public class BasePlayer : MonoBehaviour, IDamageable
     private void Start()
     {
         IsAlive = true;
-        BarUIController.Instance.HealthBar.ResetValue(Health / MaxHealth);
-        BarUIController.Instance.ManaBar.ResetValue(Mana / MaxMana);
-        BarUIController.Instance.StaminaBar.ResetValue(Stamina / MaxStamina);
+        OnHealthChange(Health, MaxHealth);
+        OnManaChange(Mana, MaxMana);
+        OnStaminaChange(Stamina, MaxStamina);
 
         if (AttackCollider != null)
         {
@@ -114,8 +144,8 @@ public class BasePlayer : MonoBehaviour, IDamageable
         if (_mainCamera != null)
         {
             Vector3 dir3 =
-            Quaternion.Euler(0, _mainCamera.GetRotationY(), 0)
-            * new Vector3(MoveInput.x, 0, MoveInput.y);
+                Quaternion.Euler(0, _mainCamera.GetRotationY(), 0)
+                * new Vector3(MoveInput.x, 0, MoveInput.y);
 
             MoveInput = new Vector2(dir3.x, dir3.z);
         }
@@ -140,7 +170,8 @@ public class BasePlayer : MonoBehaviour, IDamageable
     private void FixedUpdate()
     {
         if (IsAlive == false) return;
-        if (IsRollActive == false && MoveInput.sqrMagnitude > 0.001f)
+        if (CurrentState != PlayerState.Roll
+            && MoveInput.sqrMagnitude > 0.001f)
         {
             RotateDir = MoveInput;
 
@@ -155,9 +186,12 @@ public class BasePlayer : MonoBehaviour, IDamageable
 
                     speed = SprintSpeed;
 
+                    CurrentState = PlayerState.Move;
+
                     float usedStamina = Time.fixedDeltaTime * SprintRequiredStamina;
                     Stamina -= usedStamina;
-                    BarUIController.Instance.StaminaBar.DrainBar(usedStamina / MaxStamina);
+                    OnStaminaDrop(usedStamina, MaxStamina);
+
 
                     if (Stamina < 0f)
                     {
@@ -170,6 +204,8 @@ public class BasePlayer : MonoBehaviour, IDamageable
                     _playerAnimator.SetMovingState(PlayerAnimator.MovingState.Walk);
 
                     speed = WalkSpeed;
+
+                    CurrentState = PlayerState.Move;
                 }
             }
             else
@@ -178,6 +214,8 @@ public class BasePlayer : MonoBehaviour, IDamageable
 
                 speed = WalkSpeed;
                 DidSprintEnd = false;
+
+                CurrentState = PlayerState.Move;
             }
 
             vel.x = MoveInput.x * speed;
@@ -189,27 +227,38 @@ public class BasePlayer : MonoBehaviour, IDamageable
             if (DidSprintRequested == true)
             {
                 DidSprintRequested = false;
-                if (IsRollActive == false && IsAttacking == false && Stamina > RollRequiredStamina)
+                if (CurrentState != PlayerState.Roll
+                    && CurrentAttackState == PlayerAttackState.Idle
+                    && Stamina > RollRequiredStamina)
                 {
-                    Roll();
                     Stamina -= RollRequiredStamina;
                     StaminaChargeRemainingTime = RollStaminaChargeDelay;
+                    RollTime = 0f;
+                    Roll();
 
-                    BarUIController.Instance.StaminaBar.DrainBar(RollRequiredStamina / MaxStamina);
+                    OnStaminaDrop(RollRequiredStamina, MaxStamina);
+
+                    IsRollActive = true;
+
+                    CurrentState = PlayerState.Roll;
                 }
             }
         }
         else // 이동 없을 시 키 초기화 및 움직임 감속
         {
-            DidSprintRequested = false;
-            _playerAnimator.SetMovingState(PlayerAnimator.MovingState.Idle);
+            if (CurrentState != PlayerState.Roll)
+            {
+                DidSprintRequested = false;
+                CurrentState = PlayerState.Idle;
+                _playerAnimator.SetMovingState(PlayerAnimator.MovingState.Idle);
 
-            Vector3 vel = rb.linearVelocity;
+                Vector3 vel = rb.linearVelocity;
 
-            vel.x *= 0.7f;
-            vel.z *= 0.7f;
+                vel.x *= 0.7f;
+                vel.z *= 0.7f;
 
-            rb.linearVelocity = vel;
+                rb.linearVelocity = vel;
+            }
         }
 
         // Stamina 회복
@@ -217,11 +266,13 @@ public class BasePlayer : MonoBehaviour, IDamageable
         {
             if ((IsSprinting == false || (IsSprinting && DidSprintEnd)) && IsRollActive == false)
             {
-                Stamina += Time.fixedDeltaTime * StaminaChargeAmount;
+                float healStamina = Time.fixedDeltaTime * StaminaChargeAmount;
+
+                Stamina += healStamina;
                 if (Stamina > MaxStamina)
                     Stamina = MaxStamina;
 
-                BarUIController.Instance.StaminaBar.AddBar(Time.fixedDeltaTime * StaminaChargeAmount / MaxStamina);
+                OnStaminaChange(Stamina, MaxStamina);
             }
         }
         else
@@ -258,20 +309,25 @@ public class BasePlayer : MonoBehaviour, IDamageable
             Vector3 targetPos = RollStartPosition + RollStartRotation * Vector3.forward * dist;
             targetPos.y = rb.position.y;
             rb.MovePosition(targetPos);
-            if (t >= 1f)
+            if (t == 1f)
             {
                 IsRollActive = false;
+
+                CurrentState = PlayerState.Idle;
             }
         }
 
         // Attack
         if (IsAttackRequested)
         {
-            if (IsRollActive == false && IsAttacking == false)
+            if (CurrentState != PlayerState.Roll
+                && CurrentAttackState == PlayerAttackState.Idle)
             {
                 IsAttacking = true;
                 AttackTime = AttackDuration;
                 AttackCollider.gameObject.SetActive(true);
+
+                CurrentAttackState = PlayerAttackState.Attack;
             }
             IsAttackRequested = false;
         }
@@ -283,13 +339,16 @@ public class BasePlayer : MonoBehaviour, IDamageable
             {
                 AttackCollider.gameObject.SetActive(false);
                 IsAttacking = false;
+
+                CurrentAttackState = PlayerAttackState.Idle;
             }
         }
 
         // Skill
         if (IsSkill1Requested)
         {
-            if (IsRollActive == false && IsAttacking == false)
+            if (CurrentState != PlayerState.Roll
+                && CurrentAttackState == PlayerAttackState.Idle)
             {
                 if (Stat1 >= Skill1RequiredPoint)
                 {
@@ -303,7 +362,8 @@ public class BasePlayer : MonoBehaviour, IDamageable
 
         if (IsSkill2Requested)
         {
-            if (IsRollActive == false && IsAttacking == false)
+            if (CurrentState != PlayerState.Roll
+                && CurrentAttackState == PlayerAttackState.Idle)
             {
                 if (Stat2 >= Skill2RequiredPoint)
                 {
@@ -320,10 +380,8 @@ public class BasePlayer : MonoBehaviour, IDamageable
     {
         RollStartPosition = rb.position;
         RollStartRotation = PlayerModel.rotation;
-        RollTime = 0f;
 
         _playerAnimator.TriggerRoll();
-        IsRollActive = true;
     }
 
     private void ProcessAttack(Collider col, string hitboxName)
@@ -350,7 +408,7 @@ public class BasePlayer : MonoBehaviour, IDamageable
                 Health = 0f;
                 Die();
             }
-            BarUIController.Instance.HealthBar.DrainBar(damage / MaxHealth);
+            OnHealthDrop(damage, MaxHealth);
         }
     }
 

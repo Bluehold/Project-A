@@ -1503,6 +1503,18 @@ MonoBehaviour:
   HealthBar: {fileID: 2113844972}
   ManaBar: {fileID: 1719135063}
   StaminaBar: {fileID: 63145909}
+  Player: {fileID: 1387860976}
+--- !u!114 &1387860976 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 333867975725200106, guid: de6318ca328efed49be4421c5561cadf, type: 3}
+  m_PrefabInstance: {fileID: 2737636769970446515}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 373a3522840e25549bd9ad80bec98f89, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerMove
 --- !u!1 &1409562123
 GameObject:
   m_ObjectHideFlags: 0
