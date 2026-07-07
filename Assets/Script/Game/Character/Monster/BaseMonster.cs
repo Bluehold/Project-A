@@ -1,7 +1,11 @@
 using UnityEngine;
 
-public class BaseMonster : MonoBehaviour, IDamageable
+public class BaseMonster : MonoBehaviour, IDamageable, IGrabbable
 {
+    [Header("Character")]
+    [SerializeField]
+    private Transform MonsterModel;
+
     [Header("Status")]
     [SerializeField]
     private float MaxHealth = 100f;
@@ -19,11 +23,51 @@ public class BaseMonster : MonoBehaviour, IDamageable
     [SerializeField]
     private float MoveSpeed = 3f;
 
-    private Rigidbody rb;
+    [Header("Attack")]
+    [SerializeField]
+    private float AttackDamage = 10f;
+
+    [SerializeField]
+    private float AttackInterval = 1f;
+
+    [SerializeField]
+    private Vector3 HurtBoxSize = Vector3.one;
+
+    [SerializeField]
+    private Vector3 AttackBoxSize = Vector3.one;
+
+    [SerializeField]
+    private float AttackForwardOffset = 1f;
+
+    private float AttackTimer;
+
+    private BoxCollider HurtBox;
+
+    [SerializeField]
+    private MonsterState State = MonsterState.Normal;
+
+    [SerializeField]
+    private MonsterGrabData GrabData = new MonsterGrabData();
+
+    [SerializeField]
+    private MonsterAnimationHook AnimationHook;
+
+    [SerializeField]
+    private Transform GrabPoint;
+
+    private MonsterEvent Events = new MonsterEvent();
+
+    private bool Invincible;
+    private bool GrabInvincible;
 
     private void Awake()
     {
-        rb = GetComponent<Rigidbody>();
+        CreateHurtBox();
+
+        if (AnimationHook == null)
+        {
+            AnimationHook = GetComponent<MonsterAnimationHook>();
+        }
     }
 
     private void Update()
@@ -39,25 +83,97 @@ public class BaseMonster : MonoBehaviour, IDamageable
     // AI insert position
     private void UpdateAI()
     {
+        if (State != MonsterState.Normal)
+        {
+            return;
+        }
 
+        AttackTimer += Time.deltaTime;
+
+        if (AttackTimer >= AttackInterval)
+        {
+            AttackTimer = 0f;
+            Attack();
+        }
     }
 
     // Move insert position
     private void UpdateMove()
     {
+        if (State != MonsterState.Normal)
+        {
+            return;
+        }
+    }
 
+    private void CreateHurtBox()
+    {
+        HurtBox = GetComponent<BoxCollider>();
+
+        if (HurtBox == null)
+        {
+            HurtBox = gameObject.AddComponent<BoxCollider>();
+        }
+
+        HurtBox.isTrigger = true;
+        HurtBox.center = Vector3.zero;
+        HurtBox.size = HurtBoxSize;
+    }
+
+    private void Attack()
+    {
+        Vector3 attackCenter = transform.position + transform.forward * AttackForwardOffset;
+
+        Collider[] hits = Physics.OverlapBox(
+            attackCenter,
+            AttackBoxSize * 0.5f,
+            transform.rotation);
+
+        foreach (Collider hit in hits)
+        {
+            IDamageable target = hit.GetComponentInParent<IDamageable>();
+
+            if (target == null)
+                continue;
+
+            MonoBehaviour targetObject = target as MonoBehaviour;
+
+            if (targetObject == null)
+                continue;
+
+            if (targetObject.gameObject == gameObject)
+                continue;
+
+            target.TakeDamage(AttackDamage);
+
+            Debug.Log($"{name} -> {targetObject.name} Damage : {AttackDamage}");
+        }
     }
 
     public void TakeDamage(float damage)
     {
+        if (Invincible)
+        {
+            return;
+        }
+
+        if (GrabInvincible)
+        {
+            return;
+        }
+
         Health -= damage;
 
+        AddGroggy(damage);
+
         if (Health < 0f)
+        {
             Health = 0f;
+        }
 
-        Debug.Log($"Monster HP : {Health}/{MaxHealth}");
+        Debug.Log($"{name} HP : {Health}/{MaxHealth}");
 
-        if (Health == 0f)
+        if (Health <= 0f)
         {
             Die();
         }
@@ -65,6 +181,159 @@ public class BaseMonster : MonoBehaviour, IDamageable
 
     private void Die()
     {
-        Debug.Log("Monster Dead");
+        Debug.Log($"{name} Dead");
+
+        State = MonsterState.Dead;
+
+        AnimationHook?.Play(MonsterAnimationType.Die);
+
+        Events.OnDead?.Invoke();
+
+        Destroy(gameObject, 2f);
+    }
+
+    private void OnDrawGizmos()
+    {
+        Gizmos.color = Color.green;
+        Gizmos.DrawWireCube(
+            transform.position,
+            HurtBoxSize);
+
+        Gizmos.color = Color.red;
+
+        Vector3 attackCenter = transform.position + transform.forward * AttackForwardOffset;
+
+        Matrix4x4 oldMatrix = Gizmos.matrix;
+
+        Gizmos.matrix = Matrix4x4.TRS(
+            attackCenter,
+            transform.rotation,
+            Vector3.one);
+
+        Gizmos.DrawWireCube(
+            Vector3.zero,
+            AttackBoxSize);
+
+        Gizmos.matrix = oldMatrix;
+
+        if (GrabPoint != null)
+        {
+            Gizmos.color = Color.blue;
+            Gizmos.DrawSphere(GrabPoint.position, 0.08f);
+        }
+    }
+
+    private void AddGroggy(float amount)
+    {
+        if (State != MonsterState.Normal)
+        {
+            return;
+        }
+
+        Groggy += amount;
+
+        if (Groggy >= MaxGroggy)
+        {
+            Groggy = MaxGroggy;
+            EnterGroggy();
+        }
+    }
+
+    private void EnterGroggy()
+    {
+        State = MonsterState.Groggy;
+
+        AnimationHook?.Play(MonsterAnimationType.Groggy);
+
+        Events.OnGroggy?.Invoke();
+    }
+
+    public bool CanGrab()
+    {
+        return State == MonsterState.Groggy;
+    }
+
+    public Transform GetGrabPoint()
+    {
+        return GrabPoint == null ? transform : GrabPoint;
+    }
+
+    public bool IsGrabInvincible()
+    {
+        return GrabInvincible;
+    }
+
+    public void BeginGrab(Transform player)
+    {
+        if (!CanGrab())
+        {
+            return;
+        }
+
+        State = MonsterState.Grabbed;
+        GrabInvincible = true;
+
+        AnimationHook?.Play(MonsterAnimationType.Grab);
+
+        Events.OnGrabBegin?.Invoke();
+    }
+
+    public void ExecuteGrabAttack(float damage)
+    {
+        if (State != MonsterState.Grabbed)
+        {
+            return;
+        }
+
+        State = MonsterState.Executing;
+
+        Health -= damage;
+
+        if (Health < 0)
+        {
+            Health = 0;
+        }
+
+        if (Health <= 0f)
+        {
+            Die();
+        }
+
+        AnimationHook?.Play(MonsterAnimationType.Execute);
+
+        Events.OnGrabExecute?.Invoke();
+    }
+
+    public void EndGrab()
+    {
+        GrabInvincible = false;
+
+        StartCoroutine(KnockDownRoutine());
+
+        Events.OnGrabEnd?.Invoke();
+    }
+
+    private System.Collections.IEnumerator KnockDownRoutine()
+    {
+        State = MonsterState.KnockBack;
+
+        AnimationHook?.Play(MonsterAnimationType.KnockBack);
+
+        yield return new WaitForSeconds(0.4f);
+
+        State = MonsterState.KnockDown;
+
+        AnimationHook?.Play(MonsterAnimationType.KnockDown);
+
+        yield return new WaitForSeconds(GrabData.KnockDownTime);
+
+        State = MonsterState.Recover;
+
+        AnimationHook?.Play(MonsterAnimationType.Recover);
+
+        yield return new WaitForSeconds(0.5f);
+
+        Groggy = 0f;
+        State = MonsterState.Normal;
     }
 }

@@ -1622,11 +1622,28 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 95d797fba1986024e88fcdf9bdc4334e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BaseMonster
+  MonsterModel: {fileID: 0}
   MaxHealth: 100
   Health: 100
   MaxGroggy: 100
   Groggy: 0
   MoveSpeed: 3
+  AttackDamage: 10
+  AttackInterval: 1
+  HurtBoxSize: {x: 1, y: 1, z: 1}
+  AttackBoxSize: {x: 1, y: 1, z: 1}
+  AttackForwardOffset: 1
+  State: 0
+  GrabData:
+    MaxGroggy: 100
+    CurrentGroggy: 0
+    ExecutionDamage: 500
+    KnockBackForce: 5
+    KnockDownTime: 3
+    GrabDistance: 2
+    GrabViewDot: 0.8
+  AnimationHook: {fileID: 0}
+  GrabPoint: {fileID: 0}
 --- !u!65 &1601119896
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -2247,6 +2264,14 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 333867975725200106, guid: de6318ca328efed49be4421c5561cadf, type: 3}
+      propertyPath: Health
+      value: 100
+      objectReference: {fileID: 0}
+    - target: {fileID: 333867975725200106, guid: de6318ca328efed49be4421c5561cadf, type: 3}
+      propertyPath: IsAlive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 333867975725200106, guid: de6318ca328efed49be4421c5561cadf, type: 3}
       propertyPath: _mainCamera
       value: 

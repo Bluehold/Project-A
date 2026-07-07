@@ -367,7 +367,7 @@ public class BasePlayer : MonoBehaviour, IDamageable
             {
                 if (Stat2 >= Skill2RequiredPoint)
                 {
-                    Stat2 = Skill2RequiredPoint;
+                    Stat2 -= Skill2RequiredPoint;
 
                     Debug.Log("[Player] Skill 2 working");
                 }
