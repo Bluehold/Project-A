@@ -105,6 +105,8 @@ public class BasePlayer : MonoBehaviour, IDamageable
             AttackCollider.OnAttackTriggerEnter += ProcessAttack;
             AttackCollider.gameObject.SetActive(false);
         }
+
+
     }
 
     private void Update()
@@ -274,6 +276,7 @@ public class BasePlayer : MonoBehaviour, IDamageable
                 AttackCollider.gameObject.SetActive(true);
             }
             IsAttackRequested = false;
+            _playerAnimator.PlayAttack("mixamo_com");
         }
 
         if (IsAttacking)
