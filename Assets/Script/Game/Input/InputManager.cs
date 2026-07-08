@@ -14,6 +14,10 @@ public class InputManager : MonoBehaviour
     public bool Skill1Requested { get; private set; }
     public bool Skill2Requested { get; private set; }
 
+    public bool IsCameraDragPressed { get; private set; }
+    public Vector2 LookInput { get; private set; }
+    public float ScrollInput { get; private set; }
+
     private void Awake()
     {
         if (Instance != null)
@@ -51,6 +55,12 @@ public class InputManager : MonoBehaviour
 
         if (inputs.Player.Skill2.WasPressedThisFrame())
             Skill2Requested = true;
+
+        IsCameraDragPressed = inputs.Player.CameraDrag.IsPressed();
+        LookInput = inputs.Player.Look.ReadValue<Vector2>();
+
+        ScrollInput = inputs.Player.CameraZoom.ReadValue<float>();
+
     }
 
     public bool ConsumeSprint()

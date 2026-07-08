@@ -157,8 +157,8 @@ public class BasePlayer : MonoBehaviour, IDamageable
     {
         if (IsAlive == false) return;
 
-        HandleMovement();
         HandleRotation();
+        HandleMovement();
         HandleRoll();
         HandleAttack();
         HandleSkill();
@@ -179,23 +179,7 @@ public class BasePlayer : MonoBehaviour, IDamageable
             return;
         }
 
-        float speed;
-        if (IsSprinting == true)
-        {
-            if (DidSprintEnd == false)
-            {
-                speed = HandleSprint();
-            }
-            else
-            {
-                speed = HandleWalk();
-            }
-        }
-        else
-        {
-            speed = HandleWalk();
-            DidSprintEnd = false;
-        }
+        float speed = HandleMoveSpeed();
 
         SetMoveVelocity(speed);
     }
@@ -227,7 +211,30 @@ public class BasePlayer : MonoBehaviour, IDamageable
         rb.linearVelocity = vel;
     }
 
-    private float HandleWalk()
+    private float HandleMoveSpeed()
+    {
+        float speed;
+        if (IsSprinting == true)
+        {
+            if (DidSprintEnd == false)
+            {
+                speed = Sprint();
+            }
+            else
+            {
+                speed = Walk();
+            }
+        }
+        else
+        {
+            speed = Walk();
+            DidSprintEnd = false;
+        }
+
+        return speed;
+    }
+
+    private float Walk()
     {
         _playerAnimator.SetMovingState(PlayerAnimator.MovingState.Walk);
         CurrentState = PlayerState.Move;
@@ -235,7 +242,7 @@ public class BasePlayer : MonoBehaviour, IDamageable
         return WalkSpeed;
     }
 
-    private float HandleSprint()
+    private float Sprint()
     {
         _playerAnimator.SetMovingState(PlayerAnimator.MovingState.Sprint);
         CurrentState = PlayerState.Move;
