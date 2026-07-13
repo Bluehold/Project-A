@@ -42,12 +42,12 @@ public class PlayerAnimator : MonoBehaviour
 
     public void SetMovingState(MovingState state)
     {
-        anim.SetInteger("MovingState", (int)state);
-
-        if (state == MovingState.Idle)
+        if (anim == null)
         {
-            anim.Play("Strut Walking", (int)state);
+            return;
         }
+
+        anim.SetInteger("MovingState", (int)state);
     }
 
     public void PlayAttack(string stateName)

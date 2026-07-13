@@ -21,4 +21,9 @@ public class MonsterAnimationHook : MonoBehaviour
     {
 
     }
+
+    public virtual void SetAnimationName(MonsterAnimationType animationType, string animationName)
+    {
+
+    }
 }

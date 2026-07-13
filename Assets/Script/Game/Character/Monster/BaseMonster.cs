@@ -39,7 +39,17 @@ public class BaseMonster : MonoBehaviour, IDamageable, IGrabbable
     [SerializeField]
     private float AttackForwardOffset = 1f;
 
+    [Header("AI")]
+    [SerializeField]
+    private BaseMonsterAI MonsterAI;
+
+    [Header("Movement")]
+    [SerializeField]
+    private BaseMonsterMovement MonsterMovement;
+
     private float AttackTimer;
+
+    private bool UseRunAnimation;
 
     private BoxCollider HurtBox;
 
@@ -59,14 +69,66 @@ public class BaseMonster : MonoBehaviour, IDamageable, IGrabbable
 
     private bool Invincible;
     private bool GrabInvincible;
+    private bool AnimationHookInitialized;
+    private bool AiInitialized;
+    private bool MovementInitialized;
+
+    public MonsterState CurrentState => State;
+    public float MoveSpeedValue => MoveSpeed;
+    public bool IsUsingRunAnimation => UseRunAnimation;
+    public Transform MonsterModelTransform => MonsterModel;
+    public BaseMonsterAI AiComponent => MonsterAI;
+    public BaseMonsterMovement MovementComponent => MonsterMovement;
+    public bool IsAlive => State != MonsterState.Dead;
 
     private void Awake()
     {
         CreateHurtBox();
+        RefreshDependencies();
+    }
 
+    private void Start()
+    {
+        RefreshDependencies();
+    }
+
+    private void RefreshDependencies()
+    {
         if (AnimationHook == null)
         {
             AnimationHook = GetComponent<MonsterAnimationHook>();
+        }
+
+        if (MonsterAI == null)
+        {
+            MonsterAI = GetComponent<BaseMonsterAI>();
+        }
+
+        if (MonsterMovement == null)
+        {
+            MonsterMovement = GetComponent<BaseMonsterMovement>();
+        }
+
+        if (MonsterMovement == null)
+        {
+            MonsterMovement = gameObject.AddComponent<MonsterGroundMovement>();
+        }
+
+        if (AnimationHook != null && !AnimationHookInitialized)
+        {
+            AnimationHookInitialized = true;
+        }
+
+        if (MonsterAI != null && !AiInitialized)
+        {
+            MonsterAI.Initialize(this);
+            AiInitialized = true;
+        }
+
+        if (MonsterMovement != null && !MovementInitialized)
+        {
+            MonsterMovement.Initialize(this);
+            MovementInitialized = true;
         }
     }
 
@@ -83,10 +145,15 @@ public class BaseMonster : MonoBehaviour, IDamageable, IGrabbable
     // AI insert position
     private void UpdateAI()
     {
+        RefreshDependencies();
+
         if (State != MonsterState.Normal)
         {
+            MonsterAI?.OnStateChanged(State);
             return;
         }
+
+        MonsterAI?.Tick(this, Time.deltaTime);
 
         AttackTimer += Time.deltaTime;
 
@@ -100,10 +167,44 @@ public class BaseMonster : MonoBehaviour, IDamageable, IGrabbable
     // Move insert position
     private void UpdateMove()
     {
+        RefreshDependencies();
+
         if (State != MonsterState.Normal)
         {
             return;
         }
+
+        MonsterMovement?.Tick(Time.fixedDeltaTime);
+    }
+
+    public void SetMoveDestination(Vector3 destination, float speedScale = 1f)
+    {
+        RefreshDependencies();
+        MonsterMovement?.MoveTo(destination, speedScale);
+    }
+
+    public void StopMovement()
+    {
+        RefreshDependencies();
+        MonsterMovement?.Stop();
+    }
+
+    public void PlayAnimation(MonsterAnimationType type)
+    {
+        RefreshDependencies();
+        AnimationHook?.Play(type);
+    }
+
+    public void SetMoveSpeed(float speed)
+    {
+        MoveSpeed = speed;
+        RefreshDependencies();
+        MonsterMovement?.SetMoveSpeed(speed);
+    }
+
+    public void SetRunAnimation(bool useRunAnimation)
+    {
+        UseRunAnimation = useRunAnimation;
     }
 
     private void CreateHurtBox()
@@ -185,6 +286,8 @@ public class BaseMonster : MonoBehaviour, IDamageable, IGrabbable
 
         State = MonsterState.Dead;
 
+        MonsterAI?.Stop();
+        MonsterMovement?.Stop();
         AnimationHook?.Play(MonsterAnimationType.Die);
 
         Events.OnDead?.Invoke();
