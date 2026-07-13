@@ -16,8 +16,7 @@ public class BarRenderer : MonoBehaviour
 
     private void Awake()
     {
-        DeltaRatio = CurrentRatio;
-        DeltaAlpha = 1f;
+        ResetValue(0f);
     }
 
     private void LateUpdate()

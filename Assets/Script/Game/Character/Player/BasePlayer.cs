@@ -1,19 +1,33 @@
-using System.Runtime.ConstrainedExecution;
-using Unity.Mathematics;
-using Unity.VisualScripting;
+using System;
 using UnityEngine;
-using UnityEngine.InputSystem;
-using static UnityEngine.InputSystem.InputAction;
 
 public class BasePlayer : MonoBehaviour, IDamageable
 {
     [SerializeField]
     private bool IsAlive;
+    public enum PlayerState
+    {
+        Idle,
+        Move,
+        Roll
+    }
+
+    public enum PlayerAttackState
+    {
+        Idle,
+        Attack,
+        Skill1,
+        Skill2
+    }
+
+    private PlayerState CurrentState;
+    private PlayerAttackState CurrentAttackState;
 
     [SerializeField]
     private float MaxHealth;
     [SerializeField]
     private float Health;
+
     [SerializeField]
     private float MaxMana;
     [SerializeField]
@@ -53,10 +67,9 @@ public class BasePlayer : MonoBehaviour, IDamageable
     private Vector2 MoveInput;
     [SerializeField]
     private float RotateSpeed;
-    private Vector2 RotateDir;
 
     private bool IsSprinting;
-    private bool DidSprintRequested;
+    private bool DidRollRequested;
 
     [SerializeField]
     private float RollRequiredStamina;
@@ -64,19 +77,17 @@ public class BasePlayer : MonoBehaviour, IDamageable
     private float RollStaminaChargeDelay;
     [SerializeField]
     private float RollDistance = 0f;
-    private float RollDuration = 0.7835f;
+    private float RollDuration = 0.35f;
     private float RollTime;
     private Vector3 RollStartPosition;
     private Quaternion RollStartRotation;
     private Rigidbody rb;
-    private bool IsRollActive;
 
     [SerializeField]
     private float AttackDamage;
     [SerializeField]
     private PlayerAttackTrigger AttackCollider;
     private bool IsAttackRequested;
-    private bool IsAttacking;
     [SerializeField]
     private float AttackDuration;
     private float AttackTime;
@@ -88,6 +99,14 @@ public class BasePlayer : MonoBehaviour, IDamageable
     [SerializeField]
     private float Skill2RequiredPoint;
 
+    private void OnHealthChange(float health, float maxHealth) => BarUIController.Instance.SetHealthBar(health, maxHealth);
+    private void OnManaChange(float mana, float maxMana) => BarUIController.Instance.SetManaBar(mana, maxMana);
+    private void OnStaminaChange(float stamina, float maxStamina) => BarUIController.Instance.SetStaminaBar(stamina, maxStamina);
+
+    private void OnHealthDrop(float health, float maxHealth) => BarUIController.Instance.DrainHealthBar(health, maxHealth);
+    private void OnManaDrop(float mana, float maxMana) => BarUIController.Instance.DrainManaBar(mana, maxMana);
+    private void OnStaminaDrop(float stamina, float maxStamina) => BarUIController.Instance.DrainStaminaBar(stamina, maxStamina);
+
     private void Awake()
     {
         rb = GetComponent<Rigidbody>();
@@ -96,237 +115,302 @@ public class BasePlayer : MonoBehaviour, IDamageable
     private void Start()
     {
         IsAlive = true;
-        BarUIController.Instance.HealthBar.ResetValue(Health / MaxHealth);
-        BarUIController.Instance.ManaBar.ResetValue(Mana / MaxMana);
-        BarUIController.Instance.StaminaBar.ResetValue(Stamina / MaxStamina);
+        OnHealthChange(Health, MaxHealth);
+        OnManaChange(Mana, MaxMana);
+        OnStaminaChange(Stamina, MaxStamina);
 
         if (AttackCollider != null)
         {
             AttackCollider.OnAttackTriggerEnter += ProcessAttack;
             AttackCollider.gameObject.SetActive(false);
         }
-
-
     }
 
     private void Update()
     {
-        MoveInput = InputManager.Inputs.Player.Move.ReadValue<Vector2>();
-
         if (_mainCamera != null)
         {
             Vector3 dir3 =
-            Quaternion.Euler(0, _mainCamera.GetRotationY(), 0)
-            * new Vector3(MoveInput.x, 0, MoveInput.y);
+                Quaternion.Euler(0, _mainCamera.GetRotationY(), 0)
+                * new Vector3(MoveInput.x, 0, MoveInput.y);
 
             MoveInput = new Vector2(dir3.x, dir3.z);
         }
 
-        if (InputManager.Inputs.Player.Sprint.WasPressedThisFrame())
-            DidSprintRequested = true;
+        MoveInput = InputManager.Instance.MoveInput;
 
-        if (InputManager.Inputs.Player.Sprint.IsPressed())
-            IsSprinting = true;
-        else
-            IsSprinting = false;
+        IsSprinting = InputManager.Instance.IsSprinting;
 
-        if (InputManager.Inputs.Player.Attack.WasPressedThisFrame())
+        if (InputManager.Instance.ConsumeSprint())
+            DidRollRequested = true;
+
+        if (InputManager.Instance.ConsumeAttack())
             IsAttackRequested = true;
 
-        if (InputManager.Inputs.Player.Skill1.WasPressedThisDynamicUpdate())
+        if (InputManager.Instance.ConsumeSkill1())
             IsSkill1Requested = true;
-        if (InputManager.Inputs.Player.Skill2.WasPressedThisDynamicUpdate())
+        if (InputManager.Instance.ConsumeSkill2())
             IsSkill2Requested = true;
     }
 
     private void FixedUpdate()
     {
         if (IsAlive == false) return;
-        if (IsRollActive == false && MoveInput.sqrMagnitude > 0.001f)
+
+        HandleRotation();
+        HandleMovement();
+        HandleRoll();
+        HandleAttack();
+        HandleSkill();
+
+        UpdateRoll();
+        UpdateAttack();
+        UpdateStamina();
+    }
+
+    public void HandleMovement()
+    {
+        if (CurrentState == PlayerState.Roll)
+            return;
+
+        if (MoveInput.sqrMagnitude < 0.001f)
         {
-            RotateDir = MoveInput;
+            SetIdleVelocity();
+            return;
+        }
 
-            Vector3 vel = rb.linearVelocity;
+        float speed = HandleMoveSpeed();
 
-            float speed;
-            if (IsSprinting == true)
+        SetMoveVelocity(speed);
+    }
+
+    private void SetMoveVelocity(float speed)
+    {
+        Vector3 vel = rb.linearVelocity;
+
+        vel.x = MoveInput.x * speed;
+        vel.z = MoveInput.y * speed;
+
+        rb.linearVelocity = vel;
+    }
+
+    private void SetIdleVelocity()
+    {
+        if (CurrentState == PlayerState.Roll)
+            return;
+
+        DidRollRequested = false;
+        CurrentState = PlayerState.Idle;
+        _playerAnimator.SetMovingState(PlayerAnimator.MovingState.Idle);
+
+        Vector3 vel = rb.linearVelocity;
+
+        vel.x *= 0.7f;
+        vel.z *= 0.7f;
+
+        rb.linearVelocity = vel;
+    }
+
+    private float HandleMoveSpeed()
+    {
+        float speed;
+        if (IsSprinting == true)
+        {
+            if (DidSprintEnd == false)
             {
-                if (DidSprintEnd == false)
-                {
-                    _playerAnimator.SetMovingState(PlayerAnimator.MovingState.Sprint);
-
-                    speed = SprintSpeed;
-
-                    float usedStamina = Time.fixedDeltaTime * SprintRequiredStamina;
-                    Stamina -= usedStamina;
-                    BarUIController.Instance.StaminaBar.DrainBar(usedStamina / MaxStamina);
-
-                    if (Stamina < 0f)
-                    {
-                        Stamina = 0f;
-                        DidSprintEnd = true;
-                    }
-                }
-                else
-                {
-                    _playerAnimator.SetMovingState(PlayerAnimator.MovingState.Walk);
-
-                    speed = WalkSpeed;
-                }
+                speed = Sprint();
             }
             else
             {
-                _playerAnimator.SetMovingState(PlayerAnimator.MovingState.Walk);
-
-                speed = WalkSpeed;
-                DidSprintEnd = false;
-            }
-
-            vel.x = MoveInput.x * speed;
-            vel.z = MoveInput.y * speed;
-
-            rb.linearVelocity = vel;
-
-            // Roll 감지
-            if (DidSprintRequested == true)
-            {
-                DidSprintRequested = false;
-                if (IsRollActive == false && IsAttacking == false && Stamina > RollRequiredStamina)
-                {
-                    Roll();
-                    Stamina -= RollRequiredStamina;
-                    StaminaChargeRemainingTime = RollStaminaChargeDelay;
-
-                    BarUIController.Instance.StaminaBar.DrainBar(RollRequiredStamina / MaxStamina);
-                }
-            }
-        }
-        else // 이동 없을 시 키 초기화 및 움직임 감속
-        {
-            DidSprintRequested = false;
-            _playerAnimator.SetMovingState(PlayerAnimator.MovingState.Idle);
-
-            Vector3 vel = rb.linearVelocity;
-
-            vel.x *= 0.7f;
-            vel.z *= 0.7f;
-
-            rb.linearVelocity = vel;
-        }
-
-        // Stamina 회복
-        if (StaminaChargeRemainingTime == 0f)
-        {
-            if ((IsSprinting == false || (IsSprinting && DidSprintEnd)) && IsRollActive == false)
-            {
-                Stamina += Time.fixedDeltaTime * StaminaChargeAmount;
-                if (Stamina > MaxStamina)
-                    Stamina = MaxStamina;
-
-                BarUIController.Instance.StaminaBar.AddBar(Time.fixedDeltaTime * StaminaChargeAmount / MaxStamina);
+                speed = Walk();
             }
         }
         else
         {
+            speed = Walk();
+            DidSprintEnd = false;
+        }
+
+        return speed;
+    }
+
+    private float Walk()
+    {
+        _playerAnimator.SetMovingState(PlayerAnimator.MovingState.Walk);
+        CurrentState = PlayerState.Move;
+
+        return WalkSpeed;
+    }
+
+    private float Sprint()
+    {
+        _playerAnimator.SetMovingState(PlayerAnimator.MovingState.Sprint);
+        CurrentState = PlayerState.Move;
+
+        float usedStamina = Time.fixedDeltaTime * SprintRequiredStamina;
+        Stamina -= usedStamina;
+        OnStaminaDrop(usedStamina, MaxStamina);
+        if (Stamina < 0f)
+        {
+            Stamina = 0f;
+            DidSprintEnd = true;
+        }
+
+        return SprintSpeed;
+    }
+
+    private void HandleRotation()
+    {
+        if (MoveInput.sqrMagnitude < 0.001f)
+            return;
+
+        Vector2 RotateDir = MoveInput;
+
+        Vector3 dir = new Vector3(
+            RotateDir.x,
+            0,
+            RotateDir.y
+        );
+
+        Quaternion rot = Quaternion.LookRotation(dir);
+
+        PlayerModel.rotation = Quaternion.Slerp(
+            PlayerModel.rotation,
+            rot,
+            Time.fixedDeltaTime * RotateSpeed
+        );
+    }
+
+    private void UpdateStamina()
+    {
+        if (StaminaChargeRemainingTime > 0f)
+        {
             StaminaChargeRemainingTime -= Time.fixedDeltaTime;
             if (StaminaChargeRemainingTime < 0f)
                 StaminaChargeRemainingTime = 0f;
+
+            return;
         }
 
-        if (RotateDir.sqrMagnitude > 0.001f)
+        if (CurrentState == PlayerState.Roll)
+            return;
+
+        if (CurrentAttackState != PlayerAttackState.Idle)
+            return;
+
+        if (IsSprinting)
         {
-            Vector3 dir = new Vector3(
-                RotateDir.x,
-                0,
-                RotateDir.y
-            );
-
-            Quaternion rot = Quaternion.LookRotation(dir);
-
-            PlayerModel.rotation = Quaternion.Slerp(
-                PlayerModel.rotation,
-                rot,
-                Time.fixedDeltaTime * RotateSpeed
-            );
+            if (DidSprintEnd == false)
+                return;
         }
 
-        // Roll
-        if (IsRollActive)
+        float healStamina = Time.fixedDeltaTime * StaminaChargeAmount;
+
+        Stamina += healStamina;
+        if (Stamina > MaxStamina)
+            Stamina = MaxStamina;
+
+        OnStaminaChange(Stamina, MaxStamina);
+    }
+
+    private void HandleRoll()
+    {
+        if (DidRollRequested == false)
+            return;
+
+        DidRollRequested = false;
+
+        if (CurrentState == PlayerState.Roll)
+            return;
+
+        if (CurrentAttackState != PlayerAttackState.Idle)
+            return;
+
+        if (UseRollStamina() == true)
         {
-            RollTime += Time.fixedDeltaTime;
-            float t = Mathf.Clamp01(RollTime / RollDuration);
-            float dist = RollDistance * (1f - Mathf.Pow(1f - t, 3));
-
-            Vector3 targetPos = RollStartPosition + RollStartRotation * Vector3.forward * dist;
-            targetPos.y = rb.position.y;
-            rb.MovePosition(targetPos);
-            if (t >= 1f)
-            {
-                IsRollActive = false;
-            }
-        }
-
-        // Attack
-        if (IsAttackRequested)
-        {
-            if (IsRollActive == false && IsAttacking == false)
-            {
-                IsAttacking = true;
-                AttackTime = AttackDuration;
-                AttackCollider.gameObject.SetActive(true);
-            }
-            IsAttackRequested = false;
-            _playerAnimator.PlayAttack("mixamo_com");
-        }
-
-        if (IsAttacking)
-        {
-            AttackTime -= Time.fixedDeltaTime;
-            if (AttackTime < 0f)
-            {
-                AttackCollider.gameObject.SetActive(false);
-                IsAttacking = false;
-            }
-        }
-
-        // Skill
-        if (IsSkill1Requested)
-        {
-            if (IsRollActive == false && IsAttacking == false)
-            {
-                if (Stat1 >= Skill1RequiredPoint)
-                {
-                    Stat1 -= Skill1RequiredPoint;
-
-                    Debug.Log("[Player] Skill 1 working");
-                }
-            }
-            IsSkill1Requested = false;
-        }
-
-        if (IsSkill2Requested)
-        {
-            if (IsRollActive == false && IsAttacking == false)
-            {
-                if (Stat2 >= Skill2RequiredPoint)
-                {
-                    Stat2 -= Skill2RequiredPoint;
-
-                    Debug.Log("[Player] Skill 2 working");
-                }
-            }
-            IsSkill2Requested = false;
+            StartRoll();
         }
     }
 
-    private void Roll()
+    private bool UseRollStamina()
+    {
+        if (Stamina < RollRequiredStamina)
+            return false;
+
+        Stamina -= RollRequiredStamina;
+        StaminaChargeRemainingTime = RollStaminaChargeDelay;
+
+        OnStaminaDrop(RollRequiredStamina, MaxStamina);
+
+        return true;
+    }
+
+    private void StartRoll()
     {
         RollStartPosition = rb.position;
         RollStartRotation = PlayerModel.rotation;
-        RollTime = 0f;
 
         _playerAnimator.TriggerRoll();
-        IsRollActive = true;
+
+        RollTime = 0f;
+
+        CurrentState = PlayerState.Roll;
+    }
+
+    private void UpdateRoll()
+    {
+        if (CurrentState != PlayerState.Roll)
+            return;
+
+        RollTime += Time.fixedDeltaTime;
+        float t = Mathf.Clamp01(RollTime / RollDuration);
+        float dist = RollDistance * (1f - Mathf.Pow(1f - t, 3));
+
+        Vector3 targetPos = RollStartPosition + RollStartRotation * Vector3.forward * dist;
+        targetPos.y = rb.position.y;
+        rb.MovePosition(targetPos);
+        if (t == 1f)
+        {
+            EndRoll();
+        }
+    }
+
+    private void EndRoll()
+    {
+        CurrentState = PlayerState.Idle;
+    }
+
+    private void HandleAttack()
+    {
+        if (IsAttackRequested == false)
+            return;
+
+        IsAttackRequested = false;
+
+        if (CurrentState == PlayerState.Roll)
+            return;
+
+        if (CurrentAttackState != PlayerAttackState.Idle)
+            return;
+
+        AttackTime = AttackDuration;
+        AttackCollider.gameObject.SetActive(true);
+
+        CurrentAttackState = PlayerAttackState.Attack;
+    }
+
+    private void UpdateAttack()
+    {
+        if (CurrentAttackState != PlayerAttackState.Attack)
+            return;
+
+        AttackTime -= Time.fixedDeltaTime;
+        if (AttackTime < 0f)
+        {
+            AttackCollider.gameObject.SetActive(false);
+
+            CurrentAttackState = PlayerAttackState.Idle;
+        }
     }
 
     private void ProcessAttack(Collider col, string hitboxName)
@@ -334,10 +418,83 @@ public class BasePlayer : MonoBehaviour, IDamageable
         if (col.TryGetComponent(out IDamageable obj))
         {
             obj.TakeDamage(AttackDamage);
-            Stat1 += AttackDamage;
-            if (Stat1 > MaxStat1)
-                Stat1 = MaxStat1;
+            AddHitValueToStat(AttackDamage);
         }
+    }
+
+    private void AddHitValueToStat(float damage)
+    {
+        Stat1 += damage;
+        if (Stat1 > MaxStat1)
+            Stat1 = MaxStat1;
+    }
+
+    private void HandleSkill()
+    {
+        HandleSkill1();
+        HandleSkill2();
+    }
+
+    private void HandleSkill1()
+    {
+        if (IsSkill1Requested == false)
+            return;
+
+        IsSkill1Requested = false;
+
+        if (CurrentState == PlayerState.Roll)
+            return;
+
+        if (CurrentAttackState != PlayerAttackState.Idle)
+            return;
+
+        if (UseSkill1Stat1() == true)
+        {
+            Debug.Log("[Player] Skill 1 working");
+        }
+    }
+
+    private bool UseSkill1Stat1()
+    {
+        if (Stat1 >= Skill1RequiredPoint)
+        {
+            Stat1 -= Skill1RequiredPoint;
+
+            return true;
+        }
+
+        return false;
+    }
+
+    private void HandleSkill2()
+    {
+        if (IsSkill2Requested == false)
+            return;
+
+        IsSkill2Requested = false;
+
+        if (CurrentState == PlayerState.Roll)
+            return;
+
+        if (CurrentAttackState != PlayerAttackState.Idle)
+            return;
+
+        if (UseSkill2Stat2() == true)
+        {
+            Debug.Log("[Player] Skill 2 working");
+        }
+    }
+
+    private bool UseSkill2Stat2()
+    {
+        if (Stat2 >= Skill2RequiredPoint)
+        {
+            Stat2 -= Skill2RequiredPoint;
+
+            return true;
+        }
+
+        return false;
     }
 
     public void TakeDamage(float damage)
@@ -345,16 +502,21 @@ public class BasePlayer : MonoBehaviour, IDamageable
         if (IsAlive)
         {
             Health -= damage;
-            Stat2 += damage;
-            if (Stat2 > MaxStat2)
-                Stat2 = MaxStat2;
+            AddHurtValueToStat(damage);
             if (Health <= 0f)
             {
                 Health = 0f;
                 Die();
             }
-            BarUIController.Instance.HealthBar.DrainBar(damage / MaxHealth);
+            OnHealthDrop(damage, MaxHealth);
         }
+    }
+
+    private void AddHurtValueToStat(float damage)
+    {
+        Stat2 += damage;
+        if (Stat2 > MaxStat2)
+            Stat2 = MaxStat2;
     }
 
     private void Die()
