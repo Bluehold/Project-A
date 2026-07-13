@@ -69,7 +69,7 @@ public class BasePlayer : MonoBehaviour, IDamageable
     private float RotateSpeed;
 
     private bool IsSprinting;
-    private bool DidRollRequested;
+    private bool IsRollRequested;
 
     [SerializeField]
     private float RollRequiredStamina;
@@ -128,21 +128,13 @@ public class BasePlayer : MonoBehaviour, IDamageable
 
     private void Update()
     {
-        if (_mainCamera != null)
-        {
-            Vector3 dir3 =
-                Quaternion.Euler(0, _mainCamera.GetRotationY(), 0)
-                * new Vector3(MoveInput.x, 0, MoveInput.y);
 
-            MoveInput = new Vector2(dir3.x, dir3.z);
-        }
-
-        MoveInput = InputManager.Instance.MoveInput;
+        SetMoveInput();
 
         IsSprinting = InputManager.Instance.IsSprinting;
 
         if (InputManager.Instance.ConsumeSprint())
-            DidRollRequested = true;
+            IsRollRequested = true;
 
         if (InputManager.Instance.ConsumeAttack())
             IsAttackRequested = true;
@@ -151,6 +143,20 @@ public class BasePlayer : MonoBehaviour, IDamageable
             IsSkill1Requested = true;
         if (InputManager.Instance.ConsumeSkill2())
             IsSkill2Requested = true;
+    }
+
+    private void SetMoveInput()
+    {
+        MoveInput = InputManager.Instance.MoveInput;
+        
+        if (_mainCamera != null)
+        {
+            Vector3 dir3 =
+                Quaternion.Euler(0, _mainCamera.GetRotationY(), 0)
+                * new Vector3(MoveInput.x, 0, MoveInput.y);
+
+            MoveInput = new Vector2(dir3.x, dir3.z);
+        }
     }
 
     private void FixedUpdate()
@@ -199,7 +205,7 @@ public class BasePlayer : MonoBehaviour, IDamageable
         if (CurrentState == PlayerState.Roll)
             return;
 
-        DidRollRequested = false;
+        IsRollRequested = false;
         CurrentState = PlayerState.Idle;
         _playerAnimator.SetMovingState(PlayerAnimator.MovingState.Idle);
 
@@ -315,10 +321,10 @@ public class BasePlayer : MonoBehaviour, IDamageable
 
     private void HandleRoll()
     {
-        if (DidRollRequested == false)
+        if (IsRollRequested == false)
             return;
 
-        DidRollRequested = false;
+        IsRollRequested = false;
 
         if (CurrentState == PlayerState.Roll)
             return;

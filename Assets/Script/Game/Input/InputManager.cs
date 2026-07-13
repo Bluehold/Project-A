@@ -68,7 +68,7 @@ public class InputManager : MonoBehaviour
         if (SprintRequested == false)
             return false;
 
-        SprintRequested = true;
+        SprintRequested = false;
         return true;
     }
 
@@ -77,7 +77,7 @@ public class InputManager : MonoBehaviour
         if (AttackRequested == false)
             return false;
 
-        AttackRequested = true;
+        AttackRequested = false;
         return true;
     }
 
@@ -86,7 +86,7 @@ public class InputManager : MonoBehaviour
         if (Skill1Requested == false)
             return false;
 
-        Skill1Requested = true;
+        Skill1Requested = false;
         return true;
     }
 
@@ -95,7 +95,7 @@ public class InputManager : MonoBehaviour
         if (Skill2Requested == false)
             return false;
 
-        Skill2Requested = true;
+        Skill2Requested = false;
         return true;
     }
 }
