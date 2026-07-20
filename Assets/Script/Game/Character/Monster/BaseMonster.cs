@@ -439,4 +439,15 @@ public class BaseMonster : MonoBehaviour, IDamageable, IGrabbable
         Groggy = 0f;
         State = MonsterState.Normal;
     }
+    public FrontGrabData GetGrabData()
+    {
+        Transform grabPoint = GetGrabPoint();
+
+        return new FrontGrabData(
+            grabPoint.position,
+            grabPoint.rotation,
+            FrontGrabAnimationType.Grab
+        );
+    }
 }
+
