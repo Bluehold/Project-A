@@ -14,20 +14,20 @@ public class PlayerAnimator : MonoBehaviour
     [SerializeField]
     private GameObject PlayerModel;
     private Animator anim;
-    private Rigidbody rb;
+    private CharacterController characterController;
 
     public Animator GetAnimator() => anim;
 
     private void Start()
     {
         anim = PlayerModel.GetComponent<Animator>();
-        rb = GetComponent<Rigidbody>();
+        characterController = GetComponent<CharacterController>();
     }
 
     
     private void Update()
     {
-        anim.SetFloat("Yvelocity", rb.linearVelocity.y);
+        anim.SetFloat("Yvelocity", characterController.velocity.y);
     }
 
     public void TriggerRoll()

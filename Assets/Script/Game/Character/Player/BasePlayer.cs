@@ -5,6 +5,10 @@ public class BasePlayer : MonoBehaviour, IDamageable
 {
     [SerializeField]
     private bool IsAlive;
+
+    private CharacterController characterController;
+    private Vector3 controllerVelocity;
+
     public enum PlayerState
     {
         Idle,
@@ -77,11 +81,11 @@ public class BasePlayer : MonoBehaviour, IDamageable
     private float RollStaminaChargeDelay;
     [SerializeField]
     private float RollDistance = 0f;
+    private float RollPrevDistance;
     private float RollDuration = 0.35f;
     private float RollTime;
     private Vector3 RollStartPosition;
     private Quaternion RollStartRotation;
-    private Rigidbody rb;
 
     [SerializeField]
     private float AttackDamage;
@@ -109,7 +113,7 @@ public class BasePlayer : MonoBehaviour, IDamageable
 
     private void Awake()
     {
-        rb = GetComponent<Rigidbody>();
+        characterController = GetComponent<CharacterController>();
     }
 
     private void Start()
@@ -128,7 +132,13 @@ public class BasePlayer : MonoBehaviour, IDamageable
 
     private void Update()
     {
+        SetInputs();
 
+        ActionUpdate();
+    }
+
+    private void SetInputs()
+    {
         SetMoveInput();
 
         IsSprinting = InputManager.Instance.IsSprinting;
@@ -159,22 +169,41 @@ public class BasePlayer : MonoBehaviour, IDamageable
         }
     }
 
-    private void FixedUpdate()
+    private void ActionUpdate()
     {
         if (IsAlive == false) return;
 
         HandleRotation();
         HandleMovement();
         HandleRoll();
+        UpdateRoll();
+
+        GiveGravity();
+        CharacterControllerMove();
+
         HandleAttack();
         HandleSkill();
 
-        UpdateRoll();
         UpdateAttack();
         UpdateStamina();
     }
 
-    public void HandleMovement()
+    private void CharacterControllerMove()
+    {
+        characterController.Move(controllerVelocity * Time.deltaTime);
+    }
+
+    private void GiveGravity()
+    {
+        if (characterController.isGrounded && controllerVelocity.y < 0)
+        {
+            controllerVelocity.y = -2f;
+        }
+
+        controllerVelocity.y += Physics.gravity.y * Time.deltaTime;
+    }
+
+    private void HandleMovement()
     {
         if (CurrentState == PlayerState.Roll)
             return;
@@ -192,12 +221,8 @@ public class BasePlayer : MonoBehaviour, IDamageable
 
     private void SetMoveVelocity(float speed)
     {
-        Vector3 vel = rb.linearVelocity;
-
-        vel.x = MoveInput.x * speed;
-        vel.z = MoveInput.y * speed;
-
-        rb.linearVelocity = vel;
+        controllerVelocity.x = MoveInput.x * speed;
+        controllerVelocity.z = MoveInput.y * speed;
     }
 
     private void SetIdleVelocity()
@@ -209,12 +234,8 @@ public class BasePlayer : MonoBehaviour, IDamageable
         CurrentState = PlayerState.Idle;
         _playerAnimator.SetMovingState(PlayerAnimator.MovingState.Idle);
 
-        Vector3 vel = rb.linearVelocity;
-
-        vel.x *= 0.7f;
-        vel.z *= 0.7f;
-
-        rb.linearVelocity = vel;
+        controllerVelocity.x *= 0.7f;
+        controllerVelocity.z *= 0.7f;
     }
 
     private float HandleMoveSpeed()
@@ -253,7 +274,7 @@ public class BasePlayer : MonoBehaviour, IDamageable
         _playerAnimator.SetMovingState(PlayerAnimator.MovingState.Sprint);
         CurrentState = PlayerState.Move;
 
-        float usedStamina = Time.fixedDeltaTime * SprintRequiredStamina;
+        float usedStamina = Time.deltaTime * SprintRequiredStamina;
         Stamina -= usedStamina;
         OnStaminaDrop(usedStamina, MaxStamina);
         if (Stamina < 0f)
@@ -283,7 +304,7 @@ public class BasePlayer : MonoBehaviour, IDamageable
         PlayerModel.rotation = Quaternion.Slerp(
             PlayerModel.rotation,
             rot,
-            Time.fixedDeltaTime * RotateSpeed
+            Time.deltaTime * RotateSpeed
         );
     }
 
@@ -291,7 +312,7 @@ public class BasePlayer : MonoBehaviour, IDamageable
     {
         if (StaminaChargeRemainingTime > 0f)
         {
-            StaminaChargeRemainingTime -= Time.fixedDeltaTime;
+            StaminaChargeRemainingTime -= Time.deltaTime;
             if (StaminaChargeRemainingTime < 0f)
                 StaminaChargeRemainingTime = 0f;
 
@@ -310,7 +331,7 @@ public class BasePlayer : MonoBehaviour, IDamageable
                 return;
         }
 
-        float healStamina = Time.fixedDeltaTime * StaminaChargeAmount;
+        float healStamina = Time.deltaTime * StaminaChargeAmount;
 
         Stamina += healStamina;
         if (Stamina > MaxStamina)
@@ -353,12 +374,13 @@ public class BasePlayer : MonoBehaviour, IDamageable
 
     private void StartRoll()
     {
-        RollStartPosition = rb.position;
+        RollStartPosition = transform.position;
         RollStartRotation = PlayerModel.rotation;
 
         _playerAnimator.TriggerRoll();
 
         RollTime = 0f;
+        RollPrevDistance = 0f;
 
         CurrentState = PlayerState.Roll;
     }
@@ -368,13 +390,22 @@ public class BasePlayer : MonoBehaviour, IDamageable
         if (CurrentState != PlayerState.Roll)
             return;
 
-        RollTime += Time.fixedDeltaTime;
-        float t = Mathf.Clamp01(RollTime / RollDuration);
-        float dist = RollDistance * (1f - Mathf.Pow(1f - t, 3));
+        RollTime += Time.deltaTime;
 
-        Vector3 targetPos = RollStartPosition + RollStartRotation * Vector3.forward * dist;
-        targetPos.y = rb.position.y;
-        rb.MovePosition(targetPos);
+        float t = Mathf.Clamp01(RollTime / RollDuration);
+
+        float currentDistance = RollDistance * (1f - Mathf.Pow(1f - t, 2f));
+        float frameDistance = currentDistance - RollPrevDistance;
+
+        Vector3 rollDirection = RollStartRotation * Vector3.forward;
+
+        float rollSpeed = frameDistance / Time.deltaTime;
+
+        controllerVelocity.x = rollDirection.x * rollSpeed;
+        controllerVelocity.z = rollDirection.z * rollSpeed;
+
+        RollPrevDistance = currentDistance;
+
         if (t == 1f)
         {
             EndRoll();
@@ -410,7 +441,7 @@ public class BasePlayer : MonoBehaviour, IDamageable
         if (CurrentAttackState != PlayerAttackState.Attack)
             return;
 
-        AttackTime -= Time.fixedDeltaTime;
+        AttackTime -= Time.deltaTime;
         if (AttackTime < 0f)
         {
             AttackCollider.gameObject.SetActive(false);
