@@ -147,7 +147,7 @@ MonoBehaviour:
   RotateSpeed: 8
   RollRequiredStamina: 20
   RollStaminaChargeDelay: 1
-  RollDistance: 6
+  RollDistance: 4
   AttackDamage: 20
   AttackCollider: {fileID: 1150256765788067692}
   AttackDuration: 0.5
