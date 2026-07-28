@@ -42,6 +42,16 @@ public class PlayerAnimator : MonoBehaviour
 
     public void SetMovingState(MovingState state)
     {
+        if (anim == null)
+        {
+            return;
+        }
+
         anim.SetInteger("MovingState", (int)state);
+    }
+
+    public void PlayAttack(string stateName)
+    {
+        anim.CrossFade(stateName, 0.1f, 0, 0f);
     }
 }

@@ -4,6 +4,8 @@ public enum MonsterAnimationType
 
     Move,
 
+    Run,
+
     Attack,
 
     Hit,
