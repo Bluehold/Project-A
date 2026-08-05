@@ -194,6 +194,130 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 44569464}
   m_CullTransparentMesh: 1
+--- !u!1 &62259021
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 62259026}
+  - component: {fileID: 62259025}
+  - component: {fileID: 62259024}
+  - component: {fileID: 62259023}
+  - component: {fileID: 62259022}
+  m_Layer: 0
+  m_Name: ChickenDragon
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &62259022
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 62259021}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b26e19559b1b22a4b844bcf204338600, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ChickenDragon
+  MonsterModel: {fileID: 1496916563}
+  MaxHealth: 100
+  Health: 100
+  MaxGroggy: 100
+  Groggy: 0
+  MoveSpeed: 3
+  AttackDamage: 10
+  AttackInterval: 1
+  HurtBoxSize: {x: 3, y: 3, z: 3}
+  AttackBoxSize: {x: 3, y: 3, z: 3}
+  AttackForwardOffset: 3
+  MonsterAI: {fileID: 62259025}
+  MonsterMovement: {fileID: 0}
+  State: 0
+  AnimationHook: {fileID: 0}
+  ExternalInvincible: 0
+  WanderRadius: 6
+  WanderInterval: 4
+  chickenAI: {fileID: 0}
+  chickenCombat: {fileID: 0}
+  chickenGrabbable: {fileID: 0}
+--- !u!114 &62259023
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 62259021}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e49d23959eec4e24da4de63a87674400, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ChickenDragonGrabbable
+  GrabData:
+    MaxGroggy: 100
+    CurrentGroggy: 0
+    ExecutionDamage: 500
+    KnockBackForce: 5
+    KnockDownTime: 3
+    GrabDistance: 2
+    GrabViewDot: 0.8
+  GrabPoint: {fileID: 0}
+--- !u!114 &62259024
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 62259021}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9a29cd1c0ce000c489f8909d8342b684, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ChickenDragonCombat
+  ChargeMinDistance: 3
+  ChargeMaxDistance: 12
+  BeakRange: 2
+  SweepRange: 2.5
+  RoarRange: 6
+--- !u!114 &62259025
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 62259021}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b6cdc6e183c57864abd8e0dba5e7cd18, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ChickenDragonAI
+  DetectionRange: 8
+  AttackRange: 2
+  TargetMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+--- !u!4 &62259026
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 62259021}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -1.8911, y: 1.443, z: -2.52267}
+  m_LocalScale: {x: 3, y: 3, z: 3}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 1496916563}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &63145907
 GameObject:
   m_ObjectHideFlags: 0
@@ -1372,86 +1496,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 858862009}
   m_CullTransparentMesh: 1
---- !u!1 &967160825
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 967160827}
-  - component: {fileID: 967160826}
-  m_Layer: 0
-  m_Name: TestMonster
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &967160826
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 967160825}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 44e25bc2f352be04a8292064deab7659, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TestMonster
-  MonsterModel: {fileID: 1496916563}
-  MaxHealth: 100
-  Health: 100
-  MaxGroggy: 100
-  Groggy: 0
-  MoveSpeed: 3
-  AttackDamage: 10
-  AttackInterval: 1
-  HurtBoxSize: {x: 1, y: 1, z: 1}
-  AttackBoxSize: {x: 1, y: 1, z: 1}
-  AttackForwardOffset: 1
-  MonsterAI: {fileID: 0}
-  MonsterMovement: {fileID: 0}
-  State: 0
-  GrabData:
-    MaxGroggy: 100
-    CurrentGroggy: 0
-    ExecutionDamage: 500
-    KnockBackForce: 5
-    KnockDownTime: 3
-    GrabDistance: 2
-    GrabViewDot: 0.8
-  AnimationHook: {fileID: 0}
-  GrabPoint: {fileID: 0}
-  DefaultMoveSpeed: 2.5
-  DetectionRange: 8
-  AttackRange: 1.8
-  TargetMask:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  AnimatorController: {fileID: 9100000, guid: 48c0e11131ec55e4694f3ba7df48fac1, type: 2}
-  IdleAnimationName: Hyenas_A15_Idle
-  WalkAnimationName: Hyenas_A15_Walk
-  RunAnimationName: Hyenas_A15_Run
-  AttackAnimationName: Hyenas_A15_Atk
---- !u!4 &967160827
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 967160825}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -9.44, y: 1.521, z: 1.85}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children:
-  - {fileID: 1496916563}
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1090376016
 GameObject:
   m_ObjectHideFlags: 0
@@ -1624,19 +1668,19 @@ PrefabInstance:
   serializedVersion: 2
   m_Modification:
     serializedVersion: 3
-    m_TransformParent: {fileID: 967160827}
+    m_TransformParent: {fileID: 62259026}
     m_Modifications:
     - target: {fileID: -8679921383154817045, guid: 2930760e83e982d4b99788646c3d5a71, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -0.17
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 2930760e83e982d4b99788646c3d5a71, type: 3}
       propertyPath: m_LocalPosition.y
-      value: -0.035
+      value: -0.523
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 2930760e83e982d4b99788646c3d5a71, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -0.08
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 2930760e83e982d4b99788646c3d5a71, type: 3}
       propertyPath: m_LocalRotation.w
@@ -2371,8 +2415,8 @@ SceneRoots:
   - {fileID: 2046939766}
   - {fileID: 2737636769970446515}
   - {fileID: 854034940}
-  - {fileID: 967160827}
   - {fileID: 105186657}
   - {fileID: 1118764820}
   - {fileID: 466361044}
   - {fileID: 724909739}
+  - {fileID: 62259026}

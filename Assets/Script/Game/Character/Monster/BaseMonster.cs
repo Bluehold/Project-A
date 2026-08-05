@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public class BaseMonster : MonoBehaviour, IDamageable, IGrabbable
+public class BaseMonster : MonoBehaviour, IDamageable
 {
     [Header("Character")]
     [SerializeField]
@@ -57,18 +57,13 @@ public class BaseMonster : MonoBehaviour, IDamageable, IGrabbable
     private MonsterState State = MonsterState.Normal;
 
     [SerializeField]
-    private MonsterGrabData GrabData = new MonsterGrabData();
-
-    [SerializeField]
     private MonsterAnimationHook AnimationHook;
-
-    [SerializeField]
-    private Transform GrabPoint;
 
     private MonsterEvent Events = new MonsterEvent();
 
     private bool Invincible;
-    private bool GrabInvincible;
+    // External components (e.g., per-monster grab implementations) can set this
+    public bool ExternalInvincible = false;
     private bool AnimationHookInitialized;
     private bool AiInitialized;
     private bool MovementInitialized;
@@ -80,6 +75,18 @@ public class BaseMonster : MonoBehaviour, IDamageable, IGrabbable
     public BaseMonsterAI AiComponent => MonsterAI;
     public BaseMonsterMovement MovementComponent => MonsterMovement;
     public bool IsAlive => State != MonsterState.Dead;
+
+    // Allow external components to set the monster state when needed
+    public void SetState(MonsterState newState)
+    {
+        State = newState;
+    }
+
+    // Allow external components to reset groggy (used by per-monster grab implementations)
+    public void ResetGroggy()
+    {
+        Groggy = 0f;
+    }
 
     private void Awake()
     {
@@ -217,7 +224,9 @@ public class BaseMonster : MonoBehaviour, IDamageable, IGrabbable
         }
 
         HurtBox.isTrigger = true;
-        HurtBox.center = Vector3.zero;
+        // Place hurtbox so its bottom sits at the object's pivot (feet),
+        // instead of centering on the transform which can sink the model.
+        HurtBox.center = new Vector3(0f, HurtBoxSize.y * 0.5f, 0f);
         HurtBox.size = HurtBoxSize;
     }
 
@@ -258,10 +267,10 @@ public class BaseMonster : MonoBehaviour, IDamageable, IGrabbable
             return;
         }
 
-        if (GrabInvincible)
-        {
-            return;
-        }
+            if (ExternalInvincible)
+            {
+                return;
+            }
 
         Health -= damage;
 
@@ -298,8 +307,10 @@ public class BaseMonster : MonoBehaviour, IDamageable, IGrabbable
     private void OnDrawGizmos()
     {
         Gizmos.color = Color.green;
+        // Draw hurtbox at the same position as the collider: offset upward by half height
+        Vector3 hurtboxPos = transform.position + Vector3.up * (HurtBoxSize.y * 0.5f);
         Gizmos.DrawWireCube(
-            transform.position,
+            hurtboxPos,
             HurtBoxSize);
 
         Gizmos.color = Color.red;
@@ -319,11 +330,7 @@ public class BaseMonster : MonoBehaviour, IDamageable, IGrabbable
 
         Gizmos.matrix = oldMatrix;
 
-        if (GrabPoint != null)
-        {
-            Gizmos.color = Color.blue;
-            Gizmos.DrawSphere(GrabPoint.position, 0.08f);
-        }
+        // grab point is per-monster; handled by monster-specific components
     }
 
     private void AddGroggy(float amount)
@@ -350,105 +357,6 @@ public class BaseMonster : MonoBehaviour, IDamageable, IGrabbable
 
         Events.OnGroggy?.Invoke();
     }
-
-    public bool CanGrab()
-    {
-        return State == MonsterState.Groggy;
-    }
-
-    public Transform GetGrabPoint()
-    {
-        return GrabPoint == null ? transform : GrabPoint;
-    }
-
-    public bool IsGrabInvincible()
-    {
-        return GrabInvincible;
-    }
-
-    public void BeginGrab(Transform player)
-    {
-        if (!CanGrab())
-        {
-            return;
-        }
-
-        State = MonsterState.Grabbed;
-        GrabInvincible = true;
-
-        AnimationHook?.Play(MonsterAnimationType.Grab);
-
-        Events.OnGrabBegin?.Invoke();
-    }
-
-    public void ExecuteGrabAttack(float damage)
-    {
-        if (State != MonsterState.Grabbed)
-        {
-            return;
-        }
-
-        State = MonsterState.Executing;
-
-        Health -= damage;
-
-        if (Health < 0)
-        {
-            Health = 0;
-        }
-
-        if (Health <= 0f)
-        {
-            Die();
-        }
-
-        AnimationHook?.Play(MonsterAnimationType.Execute);
-
-        Events.OnGrabExecute?.Invoke();
-    }
-
-    public void EndGrab()
-    {
-        GrabInvincible = false;
-
-        StartCoroutine(KnockDownRoutine());
-
-        Events.OnGrabEnd?.Invoke();
-    }
-
-    private System.Collections.IEnumerator KnockDownRoutine()
-    {
-        State = MonsterState.KnockBack;
-
-        AnimationHook?.Play(MonsterAnimationType.KnockBack);
-
-        yield return new WaitForSeconds(0.4f);
-
-        State = MonsterState.KnockDown;
-
-        AnimationHook?.Play(MonsterAnimationType.KnockDown);
-
-        yield return new WaitForSeconds(GrabData.KnockDownTime);
-
-        State = MonsterState.Recover;
-
-        AnimationHook?.Play(MonsterAnimationType.Recover);
-
-        yield return new WaitForSeconds(0.5f);
-
-        Groggy = 0f;
-        State = MonsterState.Normal;
-    }
-
-    public FrontGrabData GetGrabData()
-    {
-        Transform grabPoint = GetGrabPoint();
-
-        return new FrontGrabData(
-            grabPoint.position,
-            grabPoint.rotation,
-            FrontGrabAnimationType.Grab
-        );
-    }
+    // Note: grab behavior is implemented per-monster via separate IGrabbable components.
 }
 
