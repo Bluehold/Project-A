@@ -135,8 +135,8 @@ MonoBehaviour:
   Stat1: 0
   MaxStat2: 100
   Stat2: 0
-  MaxStamina: 100
-  Stamina: 100
+  MaxStamina: 150
+  Stamina: 150
   StaminaChargeAmount: 15
   _mainCamera: {fileID: 0}
   PlayerModel: {fileID: 8918238252827643519}

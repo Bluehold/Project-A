@@ -33,6 +33,12 @@ public class InputManager : MonoBehaviour
         inputs.Enable();
     }
 
+    private void Start()
+    {
+        Cursor.visible = false;
+        Cursor.lockState = CursorLockMode.Locked;
+    }
+
     private void OnDestroy()
     {
         inputs.Disable();

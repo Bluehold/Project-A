@@ -1,7 +1,9 @@
 using Unity.Collections;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.UIElements;
+using Cursor = UnityEngine.Cursor;
 
 public class MainCamera : MonoBehaviour
 {
@@ -17,12 +19,12 @@ public class MainCamera : MonoBehaviour
     private Vector3 FocusPos;
 
     public Vector2 Angle;
-    public float DefaultDistance;
-    private float FinalDistance;
     public Vector3 Offset;
+    public float DefaultDistance;
+    private float CurrentDistance;
+    private Vector3 DistanceOffset;
     private Quaternion Rotation;
-    private Vector3 pos;
-    private Vector3 vel;
+    private Vector3 CameraVelocity;
 
     public float CameraDragSensitivity;
     [SerializeField]
@@ -48,55 +50,57 @@ public class MainCamera : MonoBehaviour
 
     private void DrawCameraGizmos()
     {
-        Rotation = Quaternion.Euler(Angle.x, Angle.y, 0f);
-        Offset = Rotation * new Vector3(0f, 0f, -FinalDistance);
-        pos = FocusObject.TransformPoint(Offset);
+        FocusPos = FocusObject.position + GetRotation(Angle) * Offset;
+
+        Vector3 direction = GetDirection(Angle);
+
+        Vector3 pos = GetDestination(direction, DefaultDistance);
 
         Gizmos.color = Color.blue;
-        Gizmos.DrawLine(pos, FocusObject.position);
+        Gizmos.DrawLine(
+            pos,
+            FocusObject.position + GetRotation(Angle) * Offset
+        );
         Gizmos.color = Color.white;
         Gizmos.DrawWireCube(pos, Vector3.one * 0.1f);
     }
 
     private void Start()
     {
-        FocusPos = FocusObject.position;
-        FinalDistance = DefaultDistance;
+        FocusPos = FocusObject.position + GetRotation(Angle) * Offset;
+        CurrentDistance = DefaultDistance;
     }
 
     private void Update()
     {
-        HandleCameraDrag();
-        HandleCameraZoom();
+        HandleCameraMoveInput();
+        HandleCameraZoomInput();
     }
 
-    private void HandleCameraDrag()
+    private void HandleCameraMoveInput()
     {
-        if (InputManager.Instance.IsCameraDragPressed)
-        {
-            Vector2 look = InputManager.Instance.LookInput;
-            Angle.y += look.x * CameraDragSensitivity;
-            Angle.x -= look.y * CameraDragSensitivity;
-            Angle.x = Mathf.Clamp(Angle.x, CameraXCap.Min, CameraXCap.Max);
-        }
+        Vector2 look = InputManager.Instance.LookInput;
+        Angle.y += look.x * CameraDragSensitivity;
+        Angle.x -= look.y * CameraDragSensitivity;
+        Angle.x = Mathf.Clamp(Angle.x, CameraXCap.Min, CameraXCap.Max);
     }
 
-    private void HandleCameraZoom()
+    private void HandleCameraZoomInput()
     {
         float scrollInput = InputManager.Instance.ScrollInput;
 
         if (scrollInput != 0)
         {
             CameraZoomLevel -= scrollInput;
-            FinalDistance = DefaultDistance * Mathf.Exp(CameraZoomLevel * CameraZoomSensitivity);
-            if (FinalDistance < CameraZoomCap.Min)
+            CurrentDistance = DefaultDistance * Mathf.Exp(CameraZoomLevel * CameraZoomSensitivity);
+            if (CurrentDistance < CameraZoomCap.Min)
             {
-                FinalDistance = CameraZoomCap.Min;
+                CurrentDistance = CameraZoomCap.Min;
                 CameraZoomLevel += 1f;
             }
-            else if (FinalDistance > CameraZoomCap.Max)
+            else if (CurrentDistance > CameraZoomCap.Max)
             {
-                FinalDistance = CameraZoomCap.Max;
+                CurrentDistance = CameraZoomCap.Max;
                 CameraZoomLevel -= 1f;
             }
         }
@@ -104,55 +108,53 @@ public class MainCamera : MonoBehaviour
 
     private void LateUpdate()
     {
-        HandleFocusToPlayer();
+        SetPosition(Angle);
     }
 
-    private void HandleFocusToPlayer()
+    private void SetPosition(Vector2 angle)
     {
-        FocusPos = GetFocusPosition();
+        SetFocusPosDamp();
 
-        Rotation = GetRotation();
+        Vector3 direction = GetDirection(angle);
 
-        Offset = GetOffsetPosition();
+        float distance = GetObstructedDistance(FocusPos, direction);
 
-        // get exact direction from Rotation and Offset
-        Vector3 dir = Offset.normalized;
-
-        float dist = GetObstructedDistance(dir);
-
-        SetTransform(dir, dist);
+        SetTransform(direction, distance, angle);
     }
 
-    private Vector3 GetFocusPosition()
+    private void SetFocusPosDamp()
     {
-        return Vector3.SmoothDamp(FocusPos, FocusObject.position, ref vel, 0.2f);
+        FocusPos = Vector3.SmoothDamp(FocusPos, FocusObject.position + GetRotation(Angle) * Offset, ref CameraVelocity, 0.2f);
     }
 
-    private Quaternion GetRotation()
+    private Quaternion GetRotation(Vector2 angle)
     {
-        return Quaternion.Euler(Angle.x, Angle.y, 0f);
+        return Quaternion.Euler(angle.x, angle.y, 0f);
     }
 
-    private Vector3 GetOffsetPosition()
+    private Vector3 GetDirection(Vector2 angle)
     {
-        return Rotation * new Vector3(0f, 0f, -FinalDistance);
+        return GetRotation(angle) * Vector3.back;
     }
 
-    private float GetObstructedDistance(Vector3 dir)
+    private float GetObstructedDistance(Vector3 focusPos, Vector3 dir)
     {
-        float dist = FinalDistance;
+        float dist = CurrentDistance;
         
         RaycastHit[] hits = Physics.SphereCastAll(
-            FocusPos,
+            focusPos,
             CameraRadius,
             dir,
-            FinalDistance,
+            CurrentDistance,
             CameraBlockMask
         );
 
         foreach (var hit in hits)
         {
-            if (hit.transform.root == FocusObject.root)
+            if (hit.collider.transform == FocusObject.parent)
+                continue;
+
+            if (hit.collider.transform.IsChildOf(FocusObject))
                 continue;
 
             dist = Mathf.Min(dist, hit.distance);
@@ -161,9 +163,14 @@ public class MainCamera : MonoBehaviour
         return dist;
     }
 
-    private void SetTransform(Vector3 dir, float dist)
+    private void SetTransform(Vector3 direction, float distance, Vector2 angle)
     {
-        transform.position = FocusPos + dir * dist;
-        transform.rotation = Rotation;
+        transform.position = GetDestination(direction, distance);
+        transform.rotation = GetRotation(angle);
+    }
+
+    private Vector3 GetDestination(Vector3 direction, float distance)
+    {
+        return FocusPos + direction * distance;
     }
 }
