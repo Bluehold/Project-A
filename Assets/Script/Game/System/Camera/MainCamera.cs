@@ -151,6 +151,9 @@ public class MainCamera : MonoBehaviour
 
         foreach (var hit in hits)
         {
+            if (hit.collider.isTrigger == true)
+                continue;
+            
             if (hit.collider.transform == FocusObject.parent)
                 continue;
 
